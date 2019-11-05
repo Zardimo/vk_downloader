@@ -46,6 +46,7 @@ def get_download_image_server(upload_url, group_id, image_path):
         response = requests.post(upload_url,
                                 params={'group_id' : group_id},
                                 files={'photo' : image})
+    response.raise_for_status()
     return response.json()
 
 
@@ -61,6 +62,7 @@ def save_photo_on_server(access_token, server_val, photo_val,
         'v' : 5.102
     }
     response = requests.post(url, params)
+    response.raise_for_status()
     return response.json()
 
 
@@ -76,6 +78,7 @@ def post_photo_vk_club(owner_id, photo_id, access_token, group_id, message):
         'message' : message
     }
     response = requests.post(url, params)
+    response.raise_for_status()
     return response.json()
 
 
@@ -85,25 +88,31 @@ if __name__ == '__main__':
     access_token = os.getenv('ACCESS_TOKEN')
     group_id = 187000263
     try:
+        if 'error' in get_comics_upload_url(access_token, group_id):
+            exit(get_comics_upload_url(access_token, 
+                                        group_id)['error']['error_msg'])
         upload_url = get_comics_upload_url(access_token,
                                     group_id)['response']['upload_url']
         comics_comment, comics_name, comics_url = get_random_comics_data()
-        dowload_comics(comics_name, comics_url)
     except requests.exceptions.HTTPError as http_err:
-        exit(f'HTTP error occured: {http_err}')
-        os.remove(image_path)
+        exit(http_err)
     image_path = os.path.join(os.getcwd(), 'vk_comics', comics_name)
-    vk_data_server = get_download_image_server(upload_url,
-                                                    group_id, image_path)
-    server_val, photo_val, hash_val = [
-                                    vk_data_server['server'], 
-                                    vk_data_server['photo'],
-                                    vk_data_server['hash']
-                                    ]
-    photo_data = save_photo_on_server(access_token, server_val, photo_val,
-                                        hash_val, group_id)['response'][0]
-    save_photo_on_server(access_token, server_val, photo_val,
-                            hash_val, group_id)
-    post_photo_vk_club(photo_data['owner_id'], photo_data['id'],
-                        access_token, group_id, comics_comment)
-    os.remove(image_path)
+    dowload_comics(comics_name, comics_url)
+    try:
+        vk_server_info = get_download_image_server(upload_url,
+                                                        group_id, image_path)
+        server_val, photo_val, hash_val = [
+                                        vk_server_info['server'], 
+                                        vk_server_info['photo'],
+                                        vk_server_info['hash']
+                                        ]
+        vk_photo = save_photo_on_server(access_token, server_val, photo_val,
+                                            hash_val, group_id)['response'][0]
+        save_photo_on_server(access_token, server_val, photo_val,
+                                hash_val, group_id)
+        post_photo_vk_club(vk_photo['owner_id'], vk_photo['id'],
+                            access_token, group_id, comics_comment)
+        os.remove(image_path)
+    except requests.exceptions.HTTPError as http_err:
+        os.remove(image_path)
+        exit(http_err)
